@@ -1,0 +1,1 @@
+pub const MAX_LIST_VECTOR_SIZE: usize = 256;
