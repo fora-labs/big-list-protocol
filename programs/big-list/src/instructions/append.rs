@@ -3,7 +3,10 @@ use crate::{
     state::BigList,
     utils::{get_j, get_k, get_l},
 };
-use anchor_lang::prelude::*;
+use anchor_lang::{
+    prelude::*,
+    solana_program::{self, stake::tools::get_minimum_delegation},
+};
 
 #[derive(Accounts)]
 #[instruction(id: String, addresses: Vec<Pubkey>)]
@@ -51,6 +54,7 @@ pub struct Append<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
+    // pub big_list: AccountInfo<'info>,
 }
 
 pub fn assert_list_does_not_exced_max_len(big_list: &BigList) {
@@ -70,7 +74,27 @@ pub fn process(ctx: Context<Append>, _id: String, addresses: Vec<Pubkey>) -> Res
     let next_size = big_list_k.len + addresses_len as u16;
 
     if next_size > 256 {
-        panic!("we need to initialize the next_k and the next_j account");
+        let big_list_j_next = &mut ctx.accounts.big_list_j_next;
+        let authority = &mut ctx.accounts.authority;
+        let system_program = &ctx.accounts.system_program;
+        create_account(
+            authority.to_account_info(),
+            big_list_j_next.to_account_info(),
+            system_program.to_account_info(),
+            &authority.key(),
+            100_000,
+            BigList::size(0).try_into().unwrap(),
+        )?;
+        let big_list_k_next = &mut ctx.accounts.big_list_j_next;
+        create_account(
+            authority.to_account_info(),
+            big_list_k_next.to_account_info(),
+            system_program.to_account_info(),
+            &authority.key(),
+            100_000,
+            BigList::size(0).try_into().unwrap(),
+        )?;
+        panic!("Was able to create accounts");
     }
 
     big_list_k.len += addresses_len as u16;
@@ -95,3 +119,66 @@ pub fn process(ctx: Context<Append>, _id: String, addresses: Vec<Pubkey>) -> Res
 
     Ok(())
 }
+
+pub fn create_account<'a>(
+    signer: AccountInfo<'a>,
+    new_account: AccountInfo<'a>,
+    system_program: AccountInfo<'a>,
+    owner: &Pubkey,
+    lamports: u64,
+    space: u64,
+) -> Result<()> {
+    let cpi_accounts = anchor_lang::system_program::CreateAccount {
+        from: signer,
+        to: new_account,
+    };
+
+    let cpi_context = anchor_lang::context::CpiContext::new(system_program, cpi_accounts);
+    // let lamports = get_minimum_delegation(space);
+    anchor_lang::system_program::create_account(cpi_context, lamports, space as u64, owner)?;
+    return Ok(());
+}
+
+pub fn create_account_with_seed<'info>(
+    from: AccountInfo<'info>,
+    to: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    owner: &Pubkey,
+    lamports: u64,
+    space: u64,
+    base: AccountInfo<'info>,
+    seed: &str,
+) -> Result<()> {
+    let cpi_accounts = anchor_lang::system_program::CreateAccount {
+        from: from.clone(),
+        to: to.clone(),
+    };
+
+    let cpi_context = anchor_lang::context::CpiContext::new(system_program, cpi_accounts);
+
+    let ix = solana_program::system_instruction::create_account_with_seed(
+        &from.key(),
+        &to.key(),
+        &base.key(),
+        seed,
+        lamports,
+        space,
+        owner,
+    );
+    solana_program::program::invoke(
+        &ix,
+        &[from, to, base],
+        // ctx.signer_seeds,
+    )
+    .map_err(Into::into)
+}
+
+// #[derive(Accounts)]
+// pub struct CreateAccountWithSeed<'info> {
+//     /// CHECK: conditionally create account
+//     pub from: AccountInfo<'info>,
+//     /// CHECK: conditionally create account
+//     pub to: AccountInfo<'info>,
+//     /// CHECK: conditionally create account
+//     pub base: AccountInfo<'info>,
+// }
