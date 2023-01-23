@@ -2,9 +2,13 @@ import {
   AccountsCoder,
   BN,
   IdlTypes,
+  Program,
   ProgramAccount,
   web3,
 } from "@project-serum/anchor";
+import { PublicKey } from "@solana/web3.js";
+import { BigList } from "../target/types/big_list";
+import _ from "lodash";
 
 export const BIG_LIST_PROGRAM_ID = new web3.PublicKey(
   "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
@@ -43,13 +47,17 @@ export const getCurrentIndices = (
   let k = Math.floor((input % (256 * 256)) / 256);
   let l = input % 256;
 
-  console.log("j,k,l", j, k, l);
   return [j, k, l];
 };
 
-export const deriveAccountsForCurrentSize = async (listId, listLen, program) => {
+export const deriveAccountsForCurrentAndNextSize = async (
+  listId,
+  listLen,
+  addressToAppendLength,
+  program
+) => {
   const [j, k] = getCurrentIndices(listLen);
-  const [jNext, kNext] = getCurrentIndices(listLen + 1);
+  const [jNext, kNext] = getCurrentIndices(listLen + addressToAppendLength);
 
   const bigList = getBigList(program.provider.publicKey, listId);
   const bigListJ = getBigList(program.provider.publicKey, listId, j);
@@ -65,10 +73,96 @@ export const deriveAccountsForCurrentSize = async (listId, listLen, program) => 
   return {
     bigList,
     bigListJ,
-    bigListJNext,
+    bigListJNext:
+      bigListJ.toBase58() === bigListJNext.toBase58()
+        ? undefined
+        : bigListJNext,
     bigListK,
-    bigListKNext
-  }
+    bigListKNext:
+      bigListK.toBase58() === bigListKNext.toBase58()
+        ? undefined
+        : bigListKNext,
+    bigListProgram: BIG_LIST_PROGRAM_ID,
+  };
+};
+
+export const appendATonOfAddresses = async (
+  listId: string,
+  addresses: PublicKey[],
+  program: Program<BigList>
+) => {
+  const batches: PublicKey[][] = _.chunk(addresses, 25);
+
+  const txs = batches.map((addressBatch) => async () => {
+    try {
+      const bigListAccount = await program.account.bigList.fetch(
+        getBigList(program.provider.publicKey, listId)
+      );
+      // console.info(
+      //   "Processing batch: ",
+      //   bigListAccount.totalElements + addressBatch.length
+      // );
+      const accounts = await deriveAccountsForCurrentAndNextSize(
+        listId,
+        bigListAccount.totalElements,
+        addressBatch.length,
+        program
+      );
+
+      if (accounts.bigListKNext) {
+        const signature = await program.methods
+          .appendRolloverK("my_big_list", addressBatch)
+          .accounts({
+            ...accounts,
+            // bigListKNext,
+            authority: program.provider.publicKey,
+          })
+          .rpc();
+        console.info(
+          "Success   : total ",
+          bigListAccount.totalElements + addressBatch.length,
+          "\nSignature : ",
+          signature
+        );
+        return signature;
+      } else {
+        const signature = await program.methods
+          .append("my_big_list", addressBatch)
+          .accounts({
+            ...accounts,
+            // bigListKNext,
+            authority: program.provider.publicKey,
+          })
+          .rpc();
+
+        console.info(
+          "Success   : total ",
+          bigListAccount.totalElements + addressBatch.length,
+          "\nSignature : ",
+          signature
+        );
+        return signature;
+      }
+    } catch (error) {
+      // TODO: Retry logic
+      console.error("error!", error);
+    }
+  });
+
+  const processBatch = async (txs: (() => Promise<string>)[], results = []) => {
+    if (txs.length === 0) {
+      return results;
+    }
+    try {
+      const [nextTx, ...remainingTxs] = txs;
+      const signature = await nextTx();
+      return await processBatch(remainingTxs, results.concat([signature]));
+    } catch (error) {
+      console.error("error", error);
+      throw error;
+    }
+  };
+  return await processBatch(txs);
 };
 
 // pub fn get_current_indices(total_elements: u32) -> (u8, u8, u8) {

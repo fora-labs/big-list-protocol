@@ -30,14 +30,14 @@ impl BigList {
         + 32 // authority          Pubkey
         + 2  // len              u8
         + 1  // depth              u32
-        + 1  // index              u32
+        + 1  // index              u8
         + 4  // total_elements     u32
         + 4  // elements           (empty vector)
         + 8  // created_at.        i64
         ;
 
     pub fn size(items: usize) -> usize {
-        Self::BASE_LEN + items * 32
+        BigList::BASE_LEN + (items * 32)
     }
 
     pub fn init(
@@ -56,7 +56,8 @@ impl BigList {
         self.created_at = created_at;
         match first_element {
             Some(pubkey) => {
-                self.elements = vec![pubkey];
+                self.elements = vec![];
+                self.elements.push(pubkey);
                 self.len = 1;
             }
             None => {

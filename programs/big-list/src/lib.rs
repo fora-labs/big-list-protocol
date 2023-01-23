@@ -26,4 +26,8 @@ pub mod big_list {
     pub fn append(ctx: Context<Append>, id: String, addresses: Vec<Pubkey>) -> Result<()> {
         append::process(ctx, id, addresses)
     }
+
+    pub fn append_rollover_k(ctx: Context<AppendRolloverK>, id: String, addresses: Vec<Pubkey>) -> Result<()> {
+        append_rollover_k::process(ctx, id, addresses)
+    }
 }

@@ -52,11 +52,5 @@ pub fn process<'a, 'b, 'c, 'info>(
     big_list.init(0, 0, authority.key(), now, Some(big_list_j.key()));
     big_list_j.init(1, 0, authority.key(), now, Some(big_list_k.key()));
     big_list_k.init(2, 0, authority.key(), now, None);
-
-    // for i in 1..=depth  {
-    //     let nested_list = Account::<BigList>::try_from(&ctx.remaining_accounts[i as usize]);
-    // }
-
-    // Ok(big_list.clone().into_inner())
     Ok(())
 }

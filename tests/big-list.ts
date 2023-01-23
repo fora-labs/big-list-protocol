@@ -2,13 +2,13 @@ import * as anchor from "@project-serum/anchor";
 import { Program, ProgramAccount } from "@project-serum/anchor";
 import { BigList } from "../target/types/big_list";
 import {
-  deriveAccountsForCurrentSize,
+  appendATonOfAddresses,
+  deriveAccountsForCurrentAndNextSize,
   getBigList,
   getCurrentIndices,
 } from "../js";
-import { Keypair, PublicKey } from "@solana/web3.js";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { assert } from "chai";
-import _ from "lodash";
 
 describe("big-list", () => {
   // Configure the client to use the local cluster.
@@ -54,9 +54,7 @@ describe("big-list", () => {
       j,
       k
     );
-    // console.log(bigList.toBase58(),  getBigListAny(program.provider.publicKey, "my_big_list", 0).toBase58(), bigListJ.toBase58(), bigListK.toBase58());
 
-    // Add your test here.
     const tx = await program.methods
       .initialize("my_big_list", 3)
       .accounts({
@@ -66,7 +64,6 @@ describe("big-list", () => {
         authority: program.provider.publicKey,
       })
       .rpc();
-    console.log("Your transaction signature", tx);
     const bigListAccount = await program.account.bigList.fetch(bigList);
     const bigListJAccount = await program.account.bigList.fetch(bigListJ);
     const bigListKAccount = await program.account.bigList.fetch(bigListK);
@@ -78,82 +75,22 @@ describe("big-list", () => {
     assert(bigListAccount.totalElements === 0);
     assert(bigListJAccount.totalElements === 0);
     assert(bigListKAccount.totalElements === 0);
-
-    console.log(bigListAccount, bigListJAccount, bigListKAccount);
   });
-
-  const appendATonOfAddresses = async (
-    listId: string,
-    addresses: PublicKey[],
-    program: Program<BigList>
-  ) => {
-    const bigListAccount = await program.account.bigList.fetch(
-      getBigList(program.provider.publicKey, listId)
-    );
-    console.log('bigListAccount totalElements', bigListAccount);
-    const accounts = await deriveAccountsForCurrentSize(
-      listId,
-      bigListAccount.totalElements,
-      program
-    );
-
-    // const [j, k] = getCurrentIndices(1000);
-
-    const batches: PublicKey[][] = _.chunk(addresses, 25);
-
-    console.log("batches", batches);
-
-    const txs = batches.map((addressBatch) => async () => {
-      try {
-        const signature = await program.methods
-          .append("my_big_list", addressBatch)
-          .accounts({
-            ...accounts,
-            // bigListKNext,
-            authority: program.provider.publicKey,
-          })
-          .rpc();
-        console.log("transaction: ", signature);
-        return signature;
-      } catch (error) {
-        // TODO: Retry logic
-        console.log("error!", error);
-      }
-    });
-
-    const processBatch = async (
-      txs: (() => Promise<string>)[],
-      results = []
-    ) => {
-      if (txs.length === 0) {
-        return results;
-      }
-      try {
-        const [nextTx, ...remainingTxs] = txs;
-        const signature = await nextTx();
-        return await processBatch(remainingTxs, results.concat([signature]));
-      } catch (error) {
-        console.log("error", error);
-        throw error;
-      }
-    };
-    return await processBatch(txs);
-  };
 
   it("Appends a bunch of addresses", async () => {
     const addresses: PublicKey[] = new Array(28)
       .fill(0)
       .map(() => new Keypair().publicKey);
-      let bigListAccount = await program.account.bigList.fetch(
-        getBigList(program.provider.publicKey, "my_big_list")
-      );
+    let bigListAccount = await program.account.bigList.fetch(
+      getBigList(program.provider.publicKey, "my_big_list")
+    );
 
-      const listAccounts = await deriveAccountsForCurrentSize(
-        "my_big_list",
-        bigListAccount.totalElements,
-        program
-      );
-    // console.log(bigList.toBase58(),  getBigListAny(program.provider.publicKey, "my_big_list", 0).toBase58(), bigListJ.toBase58(), bigListK.toBase58());
+    const listAccounts = await deriveAccountsForCurrentAndNextSize(
+      "my_big_list",
+      bigListAccount.totalElements,
+      28,
+      program
+    );
 
     try {
       const tx = await program.methods
@@ -164,22 +101,29 @@ describe("big-list", () => {
         })
         .rpc();
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
 
     bigListAccount = await program.account.bigList.fetch(listAccounts.bigList);
-    const bigListJAccount = await program.account.bigList.fetch(listAccounts.bigList);
-    const bigListKAccount = await program.account.bigList.fetch(listAccounts.bigList);
+    const bigListJAccount = await program.account.bigList.fetch(
+      listAccounts.bigListJ
+    );
+    const bigListKAccount = await program.account.bigList.fetch(
+      listAccounts.bigListK
+    );
 
-    console.log('bigListKAccount', bigListKAccount)
     assert(bigListAccount.totalElements === 28);
+    assert(bigListAccount.len === 1);
+    assert(bigListAccount.elements.length === 1);
     assert(bigListJAccount.totalElements === 28);
+    assert(bigListJAccount.len === 1);
+    assert(bigListJAccount.elements.length === 1);
     assert(bigListKAccount.totalElements === 28);
-    // assert(bigListKAccount.elements.length === 28);
+    assert(bigListKAccount.elements.length === 28);
+    assert(bigListKAccount.len === 28);
   });
 
   it("Appends a large amount of tx", async () => {
-
     const addresses: PublicKey[] = new Array(100)
       .fill(0)
       .map(() => new Keypair().publicKey);
@@ -196,7 +140,6 @@ describe("big-list", () => {
       0
     );
     const bigListKAccount = await program.account.bigList.fetch(bigListK);
-    console.log('bigListKaccount', bigListKAccount)
     assert(bigListKAccount.elements.length === 128);
   });
 
@@ -218,48 +161,94 @@ describe("big-list", () => {
       addresses,
       program
     );
-    console.log("signatures", signatures);
-
-
     const bigListKAccount = await program.account.bigList.fetch(bigListK);
-    console.log('bigListKaccount', bigListKAccount)
     assert(bigListKAccount.elements.length === 256);
   });
 
   it("Rolls over to next leaf", async () => {
-    const [j, k] = getCurrentIndices(256);
-    const addresses: PublicKey[] = new Array(1)
+    const addresses: PublicKey[] = new Array(2)
       .fill(0)
       .map(() => new Keypair().publicKey);
 
-    await appendATonOfAddresses(
+    await appendATonOfAddresses("my_big_list", addresses, program);
+
+    let bigListAccount = await program.account.bigList.fetch(
+      getBigList(program.provider.publicKey, "my_big_list")
+    );
+
+    const listAccounts = await deriveAccountsForCurrentAndNextSize(
       "my_big_list",
-      addresses,
+      bigListAccount.totalElements,
+      0,
       program
     );
 
+    bigListAccount = await program.account.bigList.fetch(listAccounts.bigList);
+    const bigListJAccount = await program.account.bigList.fetch(
+      listAccounts.bigListJ
+    );
+    const bigListKAccount = await program.account.bigList.fetch(
+      listAccounts.bigListK
+    );
+
+    assert(bigListAccount.totalElements === 258);
+    assert(bigListAccount.len === 1);
+    assert(bigListAccount.elements.length === 1);
+
+    assert(bigListJAccount.totalElements === 258);
+    assert(bigListJAccount.len === 2);
+    assert(bigListJAccount.elements.length === 2);
+
+    assert(bigListKAccount.totalElements === 2);
+    assert(bigListKAccount.elements.length === 2);
+    assert(bigListKAccount.len === 2);
   });
 
-  // it("Append one more", async () => {
-  //   const [j, k] = getCurrentIndices(257);
-  //   const bigListK = getBigList(
-  //     program.provider.publicKey,
-  //     "my_big_list",
-  //     j,
-  //     k
-  //   );
+  it("Adds 1 whitelist (10K pubkeys)", async () => {
+    const addresses: PublicKey[] = new Array(10000)
+      .fill(0)
+      .map(() => new Keypair().publicKey);
 
-  //   const addresses: PublicKey[] = new Array(1)
-  //     .fill(0)
-  //     .map(() => new Keypair().publicKey);
+    const balanceBefore = await program.provider.connection.getBalance(
+      program.provider.publicKey
+    );
 
-  //   const signatures = await appendATonOfAddresses(
-  //     "my_big_list",
-  //     addresses,
-  //     program
-  //   );
-  //   console.log("signatures", signatures);
-  //   const bigListKAccount = await program.account.bigList.fetch(bigListK);
-  //   assert(bigListKAccount.elements.length === 256);
-  // });
+    let start = Date.now();
+    await appendATonOfAddresses("my_big_list", addresses, program);
+    let end = Date.now();
+
+    let bigListAccount = await program.account.bigList.fetch(
+      getBigList(program.provider.publicKey, "my_big_list")
+    );
+
+    const listAccounts = await deriveAccountsForCurrentAndNextSize(
+      "my_big_list",
+      bigListAccount.totalElements,
+      0,
+      program
+    );
+
+    const balanceAfter = await program.provider.connection.getBalance(
+      program.provider.publicKey
+    );
+
+    console.info("10K appended : ", (end - start) / 60000, " minutes.");
+
+    console.info(
+      "SOL Cost   : ",
+      (balanceBefore - balanceAfter) / LAMPORTS_PER_SOL
+    );
+
+    bigListAccount = await program.account.bigList.fetch(listAccounts.bigList);
+    // const bigListJAccount = await program.account.bigList.fetch(
+    //   listAccounts.bigListJ
+    // );
+    // const bigListKAccount = await program.account.bigList.fetch(
+    //   listAccounts.bigListK
+    // );
+
+    assert(bigListAccount.totalElements === 10258);
+    assert(bigListAccount.len === 1);
+    assert(bigListAccount.elements.length === 1);
+  });
 });

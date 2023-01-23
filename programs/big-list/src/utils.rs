@@ -19,9 +19,12 @@ pub fn get_k(total: u32) -> u8 {
     if total > 256 * 256 * 256 {
         panic!("total is too large")
     }
+
+    println!("total: {}", total);
+
     let input = total - 1;
-    let j = (input / (256 * 256)) as u8;
-    return j;
+    let k = input % ((256 * 256) as u32) / 256;
+    return k as u8;
 }
 
 pub fn get_l(total: u32) -> u8 {
@@ -109,5 +112,28 @@ mod tests {
         assert_eq!(j, 255);
         assert_eq!(k, 255);
         assert_eq!(l, 255);
+    }
+
+    pub fn it_returns_the_expected_k() {
+        let total_elements = gen_big_list(256).total_elements;
+        let k = get_k(total_elements);
+        assert_eq!(k, 0);
+
+        let total_elements = gen_big_list(257).total_elements;
+        let k = get_k(total_elements);
+        assert_eq!(k, 1);
+
+        let total_elements = gen_big_list(255).total_elements;
+        let k = get_k(total_elements);
+        assert_eq!(k, 0);
+
+        let total_elements = gen_big_list(10000).total_elements;
+        let k = get_k(total_elements);
+        assert_eq!(k, 39);
+
+        // Max
+        let total_elements = gen_big_list(16777216).total_elements;
+        let k = get_k(total_elements);
+        assert_eq!(k, 255);
     }
 }
