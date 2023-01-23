@@ -17,3 +17,4 @@ no-log-ix-name = []
 
 [dependencies]
 anchor-lang = {version = "0.26.0", features = ["init-if-needed"]}
+clockwork-sdk = {version = "1.3.16"}

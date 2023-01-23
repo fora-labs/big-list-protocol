@@ -2,7 +2,7 @@
 seeds = false
 skip-lint = false
 [programs.localnet]
-big_list = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+big_list = "2dcZKYRfijTg3TMU2xocaCKVv6LJTzzdwtLBbMUyKzKi"
 
 [registry]
 url = "https://api.apr.dev"
@@ -13,3 +13,8 @@ wallet = "/Users/ryankane/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+
+[test.validator]
+url = "https://rpc.helius.xyz/?api-key=ca8112d0-9431-4b84-beac-6df95719434f"
+[[test.validator.clone]]
+address = "3XXuUFfweXBwFgFfYaejLvZE4cGZiHgKiGfMtdxNzYmv"

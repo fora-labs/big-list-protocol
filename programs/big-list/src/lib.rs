@@ -8,7 +8,7 @@ pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("2dcZKYRfijTg3TMU2xocaCKVv6LJTzzdwtLBbMUyKzKi");
 
 #[program]
 pub mod big_list {
@@ -29,5 +29,13 @@ pub mod big_list {
 
     pub fn append_rollover_k(ctx: Context<AppendRolloverK>, id: String, addresses: Vec<Pubkey>) -> Result<()> {
         append_rollover_k::process(ctx, id, addresses)
+    }
+
+    pub fn initialize_batch_process(ctx: Context<InitializeBatchProcess>, id: String) -> Result<()> {
+        initialize_batch_process::process(ctx, id)
+    }
+
+    pub fn batch_distribute<'a, 'b, 'c, 'info>(ctx: Context<'a, 'b, 'c, 'info, BatchDistribute<'info>>) -> Result<clockwork_sdk::state::ThreadResponse> {
+        batch_distribute::process(ctx)
     }
 }

@@ -3,8 +3,11 @@ import { Program, ProgramAccount } from "@project-serum/anchor";
 import { BigList } from "../target/types/big_list";
 import {
   appendATonOfAddresses,
+  CLOCKWORK_THREAD_PROGRAM_ID,
   deriveAccountsForCurrentAndNextSize,
+  getBatchProccessPDA,
   getBigList,
+  getClockworkThreadPDA,
   getCurrentIndices,
 } from "../js";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
@@ -12,7 +15,8 @@ import { assert } from "chai";
 
 describe("big-list", () => {
   // Configure the client to use the local cluster.
-  anchor.setProvider(anchor.AnchorProvider.env());
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
 
   const program = anchor.workspace.BigList as Program<BigList>;
 
@@ -141,6 +145,48 @@ describe("big-list", () => {
     );
     const bigListKAccount = await program.account.bigList.fetch(bigListK);
     assert(bigListKAccount.elements.length === 128);
+  });
+
+  it("Initializes a Batch Process", async () => {
+    const listId = "my_big_list";
+    const bigList = getBigList(program.provider.publicKey, listId);
+    const [j, k] = getCurrentIndices(0);
+
+    const bigListJ = getBigList(program.provider.publicKey, listId, j);
+    const bigListK = getBigList(program.provider.publicKey, listId, j, k);
+
+    const batchProcess = await getBatchProccessPDA(
+      program.provider.publicKey,
+      listId
+    );
+
+    const batchProcessorThread = await getClockworkThreadPDA(
+      batchProcess,
+      listId
+    );
+    try {
+          await program.methods
+      .initializeBatchProcess(listId)
+      .accounts({
+        batchProcess,
+        batchProcessorThread,
+        bigList,
+        bigListJ,
+        bigListK,
+        threadProgram: CLOCKWORK_THREAD_PROGRAM_ID,
+      })
+      .rpc();
+
+    } catch (error) {
+      console.log(error)
+    }
+
+    const batchProcessAccount = await program.account.batchProcess.fetch(
+      batchProcess
+    );
+    assert(!!batchProcessAccount.status.processing);
+    assert(batchProcessAccount.totalProcessed === 0);
+
   });
 
   it("Batch appends up to 256", async () => {
